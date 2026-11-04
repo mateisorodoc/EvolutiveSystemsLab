@@ -1,0 +1,75 @@
+\documentclass[preprint,12pt]{elsarticle}
+
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{lineno}
+\usepackage{hyperref}
+
+\journal{Biomedical Signal Processing and Control}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Simulation-Based Multimodal Closed-Loop Emotional Control in 2D Valence--Arousal Space Using Wearable EEG, Autonomic Signals, and Multi-Actuator Model Predictive Control}
+
+\author[utcn]{Matei Sorodoc\corref{cor1}}
+\ead{matei.sorodoc@student.utcluj.ro}
+\cortext[cor1]{Corresponding author}
+
+\affiliation[utcn]{
+    organization={Master's Program in Cyber-Physical Systems, Technical University of Cluj-Napoca (UTCN)},
+    city={Cluj-Napoca},
+    country={Romania}
+}
+
+%% Highlights (3 to 5 bullet points, max 85 characters each including spaces)
+\begin{highlights}
+\item Models 2D Valence--Arousal emotional control using multimodal wearable signals.
+\item Fuses sparse EEG, EDA, and HRV in a Kalman filter to handle emotional carry-over.
+\item Combines music, ambient light, and wrist haptics to fix tempo--valence coupling.
+\item Compares MPC, Fuzzy-MPC, and RL controllers on DEAP and Emognition virtual subjects.
+\item Tests closed-loop tracking and robustness against temporary EEG sensor dropouts.
+\end{highlights}
+
+\begin{abstract}
+Affective Brain--Computer Interfaces (aBCIs) and wearable physiological systems offer a promising way to monitor stress and support emotion regulation. However, most existing affective computing systems work in open loop---meaning they only classify emotions without actively trying to change them. Meanwhile, the few existing closed-loop systems typically regulate only a single dimension (such as stress or arousal) using one sensor and one type of feedback, usually music. Moving toward practical closed-loop emotional control with wearable devices requires solving three main problems: (i) estimating a person's two-dimensional (2D) emotional state (valence and arousal) from noisy sensors that react at different speeds; (ii) accounting for emotional carry-over (lingering arousal) between consecutive states; and (iii) coordinating multiple feedback actuators when a single actuator cannot control valence and arousal independently. In this work, we design and test a simulation-based (\emph{in silico}) multimodal closed-loop emotional control framework built from real recordings in the DEAP ($N=32$) and Emognition ($N=43$) datasets. First, we build subject-specific 2D state-space ``virtual subjects'' that combine a 6-channel wearable-friendly EEG setup with electrodermal activity (EDA) and heart rate variability (HRV) using a Kalman filter. Second, we model a three-actuator feedback system that coordinates generative music, ambient colored lighting, and slow heartbeat-like wrist vibrations, addressing the known problem where slowing down music to calm a user also lowers positive valence. Third, we compare Linear Quadratic Regulation (LQR), Model Predictive Control (MPC), Fuzzy-Supervised MPC, and Reinforcement Learning (RL) across four regulation goals (\emph{De-stress}, \emph{Calm}, \emph{Make Happy}, and \emph{Excite}). This simulation study provides a solid control-engineering baseline before testing on live human subjects.
+\end{abstract}
+
+\begin{keyword}
+Affective Brain--Computer Interface (aBCI) \sep Closed-Loop Emotion Regulation \sep Multimodal Sensor Fusion \sep Model Predictive Control (MPC) \sep Electroencephalography (EEG) \sep Electrodermal Activity (EDA) \sep Valence--Arousal Model
+\end{keyword}
+
+\end{frontmatter}
+
+\linenumbers
+
+\section{Introduction}
+
+Emotions play a central role in daily decision-making, attention, and mental well-being, while long-term difficulties in regulating negative emotions are closely linked to anxiety, depression, and workplace burnout \cite{russell1980circumplex,gross1995emotion,palfi2024adaptive}. Over the last twenty years, Affective Computing and passive Affective Brain--Computer Interfaces (aBCIs) have made strong progress in recognizing human emotions from brain and body signals \cite{wu2023affective,xiong2025affective}. Most of these systems use Russell's two-dimensional (2D) Circumplex Model of Affect, which maps emotions along two axes: \emph{valence} (how pleasant or unpleasant a feeling is) and \emph{arousal} (how calm or excited a person feels) \cite{russell1980circumplex}. Using signals such as electroencephalography (EEG), electrodermal activity (EDA), photoplethysmography (PPG), and heart rate variability (HRV), modern machine learning models can reliably classify induced emotions \cite{wu2023affective,koelstra2012deap,saganowski2022emognition}. However, recent reviews of neurofeedback and affective BCI systems point out a major limitation: the vast majority of studies stop at \emph{open-loop recognition} \cite{zhang2026closed,sayal2025music}. Simply detecting that a user is stressed or upset without automatically adjusting the environment to help them recover leaves the control loop incomplete \cite{ewing2016evaluation,lorenz2016automatic}.
+
+Closing this loop---so that real-time physiological measurements continuously adjust external stimuli to guide the user toward a target emotional state---shifts the focus from passive monitoring to active emotion regulation \cite{ewing2016evaluation,lorenz2016automatic}. Several early prototypes have shown that closed-loop emotion regulation is possible, especially using adaptive music \cite{sayal2025music,ramirez2015musical,daly2016affective,ehrlich2019closed}. For example, Ramirez et al.~\cite{ramirez2015musical} used prefrontal EEG alpha asymmetry ($\text{F4}-\text{F3}$) and $\beta/\alpha$ ratios to adjust the tempo and volume of music, reducing depression scores in elderly users. Daly et al.~\cite{daly2016affective} built an affective Brain--Computer Music Interface (aBCMI) combining EEG, ECG, skin conductance, and respiration to guide users along four target trajectories (\emph{Make Happy}, \emph{Calm}, \emph{De-stress}, and \emph{Excite}). Similarly, Ehrlich et al.~\cite{ehrlich2019closed} used a real-time EEG classifier to drive an automatic music generator, showing that frontal-central brain activity actively responded to the musical feedback. More recently, Zhang et al.~\cite{zhang2026mindmelody} proposed \emph{MindMelody}, which links a deep-learning EEG decoder with a language model to adjust generated audio. In parallel, control-engineering studies by Fekri Azgomi and Faghih~\cite{azgomi2022enhancement} and Khazaei et al.~\cite{khazaei2024bayesian} showed that hidden stress and arousal levels can be estimated from skin conductance impulses and regulated in simulation (\emph{in silico}) using Fuzzy-Supervised Linear Quadratic Regulators (LQR) and Model Predictive Control (MPC).
+
+Despite these promising results, three practical limitations still prevent current closed-loop systems from achieving reliable 2D emotional control with everyday wearable sensors:
+
+\begin{enumerate}
+    \item \textbf{1D Control vs.\ 2D Multimodal Dynamics and Emotional Carry-Over:} Existing mathematical control frameworks (such as LQR and MPC in \cite{azgomi2022enhancement}) only regulate a \textbf{1D state} (stress/arousal) estimated from a single sensor (EDA). Likewise, early EEG music loops \cite{ehrlich2019closed} simplified control to a single diagonal line ($\text{valence} = \text{arousal}$), meaning they could not steer valence and arousal independently across all four quadrants of the 2D emotion space. Tracking both dimensions reliably requires combining multiple sensors. Studies on the DEAP \cite{koelstra2012deap}, FACED \cite{chen2023large}, and Emognition \cite{saganowski2022emognition} datasets show that EEG features---such as frontal alpha asymmetry, midline frontal theta (\texttt{Fz}), parietal alpha (\texttt{P4}), and phase synchronization---respond quickly to changes in valence and mental effort \cite{ewing2016evaluation,marin2018affective}, whereas autonomic signals (EDA and HRV) provide a more stable measure of arousal \cite{koelstra2012deap,khazaei2024bayesian}. However, brain and autonomic signals change at very different speeds. As shown in film-induction studies \cite{fernandez2019effective} and measured by the Affective Priming Score (APS) \cite{gutierrez2025affective}, physiological arousal lingers from one emotional state to the next (``emotional carry-over''). Combining fast EEG with slow EDA/HRV without accounting for this carry-over effect introduces estimation errors right after an emotional transition \cite{wu2023affective,gutierrez2025affective}.
+
+    \item \textbf{Coupling Limitations of Single-Actuator (Music-Only) Feedback:} Most closed-loop prototypes rely on a single feedback channel, usually generated music \cite{sayal2025music,daly2016affective,ehrlich2019closed}. However, recent validation studies of parametric music generators (\emph{AffectMachine-Classical} \cite{agres2023affectmachine} and \emph{AffectMachine-Pop} \cite{agres2025affectmachine}) revealed an important side effect: while musical tempo and rhythm control perceived arousal very well ($R^2 \approx 0.86\text{--}0.96$), perceived valence suffers from a \textbf{tempo--valence crossover}. Specifically, when a controller slows down the music to guide a user into a calm, positive state (low arousal, high valence), listeners often perceive the slower music as sadder, causing an unwanted drop in valence \cite{ehrlich2019closed,agres2023affectmachine,agres2025affectmachine}. On the other hand, slow acoustic feedback alone is often too weak to quickly raise arousal during \emph{Excite} tasks \cite{daly2016affective}. Solving this issue requires \textbf{combining multiple actuators} that complement each other: (i) \textbf{ambient colored lighting}, where Li et al.~\cite{li2025designing} showed that specific combinations of light color and brightness (such as dim purple light at $20\text{ lx}$ or bright green light at $180\text{ lx}$) improve EEG markers of positive emotion regulation even at low arousal; and (ii) \textbf{wrist-worn heartbeat haptics}, where Azevedo et al.~\cite{azevedo2017calming} showed that gentle wrist vibrations pulsing $20\%$ slower than the user's resting heart rate ($40\text{--}65\text{ bpm}$) naturally reduce skin conductance arousal and anxiety without distracting the user. So far, no closed-loop control study has combined music, lighting, and haptic feedback into a single mathematical model.
+
+    \item \textbf{Lack of Simulation Benchmarks Before Human Testing:} In biomedical control fields like automated anesthesia or insulin delivery, controllers are thoroughly tested in computer simulations (\emph{in silico}) on virtual patient models before being tested on humans \cite{azgomi2022enhancement}. In affective computing, however, many studies test simple threshold rules directly on small groups of volunteers ($N = 5\text{--}10$) \cite{zhang2026closed,sayal2025music,ramirez2015musical,ehrlich2019closed}. This often leads to high non-responder rates (around $38\%$ in music neurofeedback studies \cite{sayal2025music}) and poor stability when brain signals drift between sessions, an issue recently highlighted in reinforcement learning brain stimulation by Humaidan et al.~\cite{humaidan2026first}. Building a realistic simulation benchmark from public wearable datasets makes it possible to compare model-based controllers (MPC, Fuzzy-Supervised MPC \cite{azgomi2022enhancement}) against model-free Reinforcement Learning (RL) \cite{humaidan2026first} under realistic noise, sensor dropouts, and user-safety constraints \cite{steinert2020wired}.
+\end{enumerate}
+
+To address these three challenges, this paper presents an \textbf{\emph{in silico} multimodal closed-loop emotional control framework} for the 2D valence--arousal space. Instead of using arbitrary synthetic numbers, we build data-driven 2D state-space ``Virtual Subjects'' from real recordings of $N=32$ participants in the \textbf{DEAP} dataset \cite{koelstra2012deap} and $N=43$ participants in the wearable \textbf{Emognition} dataset \cite{saganowski2022emognition}. To keep the design realistic for a wearable headset (such as OpenBCI), we limit the EEG input to 6 electrodes (\texttt{Fz, F3, F4, P4, T7, T8}) paired with wrist EDA and PPG/HRV. Our main contributions are:
+\begin{itemize}
+    \item \textbf{Multimodal 2D State Estimator with Carry-Over Filtering:} We design a discrete-time 2D Valence--Arousal state-space model and Kalman filter that combines fast EEG features with slow EDA/HRV features while using Affective Priming Score (APS) weighting \cite{gutierrez2025affective} to reduce emotional carry-over errors.
+    \item \textbf{Three-Actuator Coordination Model:} We model the combined effect of parametric music \cite{ehrlich2019closed,agres2023affectmachine,agres2025affectmachine}, colored ambient lighting \cite{li2025designing}, and slow heartbeat wrist vibrations \cite{azevedo2017calming}, showing how lighting and haptics help music overcome the tempo--valence crossover.
+    \item \textbf{Closed-Loop Controller Comparison and Dropout Testing:} We compare Open-Loop stimulation, LQR, Constrained MPC, Fuzzy-Supervised MPC \cite{azgomi2022enhancement}, and Reinforcement Learning \cite{humaidan2026first} across four regulation tasks (\emph{De-stress}, \emph{Calm}, \emph{Make Happy}, and \emph{Excite} \cite{daly2016affective}), evaluating tracking accuracy, settling time, and robustness when EEG channels temporarily drop out due to movement.
+\end{itemize}
+
+The rest of this paper is organized as follows: Section~2 describes the datasets, feature extraction, 2D state-space model identification, actuator models, and controller designs. Section~3 presents the simulation results for state tracking, multi-actuator coordination, and sensor-dropout robustness. Section~4 discusses the main findings, practical implementation on wearable hardware, and ethical considerations, and Section~5 concludes the paper.
+
+\bibliographystyle{elsarticle-num}
+\bibliography{references}
+
+\end{document}
